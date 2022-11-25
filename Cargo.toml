@@ -1,0 +1,13 @@
+[package]
+name = "neural"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+matrix = {git = "https://github.com/Pyrrhos512/Rust-matrix"}
+mnist = {git = "https://github.com/Pyrrhos512/Rust-mnist"}
+thread_pool = {git = "https://github.com/Pyrrhos512/Rust-thread_pool"}
+rand = "0.8.5"
+num-traits = "0.2.15"

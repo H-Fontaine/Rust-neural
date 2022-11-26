@@ -85,81 +85,37 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
             let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();
             let chosen_images = images.chose_lines(&choices);
             let chosen_expected_results = expected_results.chose_lines(&choices);
-            let weights = self.weights.clone();
-            let bias = self.bias.clone();
+            let weights_ref = self.weights.clone();
+            let bias_ref = self.bias.clone();
             let nb_layers = self.nb_layers.clone();
             let learning_rate = self.learning_rate.clone();
             let runnable = move || {
-                let weights_cloned;
-                let bias_cloned;
-                {
-                    weights_cloned = weights.lock().unwrap().clone();
-                    bias_cloned = bias.lock().unwrap().clone();
-                }
-                let mut lasts_res = Vec::<Matrix<T>>::with_capacity(nb_layers);
-                let mut lasts_cl = Vec::<Matrix<T>>::with_capacity(nb_layers);
-                lasts_res.push(chosen_images);
-
-                for i in 0..nb_layers {
-                    lasts_cl.push(
-                        match lasts_res.last() {
-                            Some(matrix) => matrix.clone() * weights_cloned[i].clone() + bias_cloned[i].clone(),
-                            None => panic!("Error during propagation"),
-                        }
-                    );
-
-                    lasts_res.push(
-                        match lasts_cl.last() {
-                            Some(matrix) => matrix.clone().map(|a| sigmoid(a)),
-                            None => panic!("Error during propagation"),
-                        }
-                    );
-                }
-
-                let mut weights = weights.lock().unwrap();
-                let mut bias = bias.lock().unwrap();
-
-                let correction_coef : T = learning_rate / NumCast::from(batch_size).unwrap();
-
-                let cost = chosen_expected_results + -lasts_res.pop().expect("Error during backpropagation");
-
-                let mut layer_error = cost & lasts_cl.pop().expect("Error during backpropagation").map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap()));
-
-                weights[nb_layers - 1] += (lasts_res.pop().expect("Error during backpropagation").t() * layer_error.clone()) * correction_coef;
-                bias[nb_layers - 1] += layer_error.clone().sum_line() * correction_coef;
-
-                for i in 1..nb_layers {
-                    layer_error = (layer_error * weights[nb_layers - i].t()) & (lasts_cl.pop().expect("Error during backpropagation").map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap())));
-                    weights[nb_layers - (i + 1)] += (lasts_res.pop().expect("Error during backpropagation").t() * layer_error.clone()) * correction_coef;
-                    bias[nb_layers - (i + 1)] += layer_error.clone().sum_line() * correction_coef;
-                }
+                Network::backpropagation(batch_size, nb_layers, learning_rate, chosen_expected_results, weights_ref.clone(), bias_ref.clone(), Network::propagation(nb_layers, chosen_images,weights_ref, bias_ref))
             };
-
             thread_pool.add_task(Box::new(runnable), None);
         }
         thread_pool.join();
     }
-
 
     /*
     Realise the propagation of the given images through the network and returning all the necessary data to realise the backpropagation
     - images : Matrix<T>            The images on which the propagation is made
     */
     fn propagation(nb_layers : usize, images : Matrix<T>, weights : Arc<Mutex<Vec<Matrix<T>>>>, bias : Arc<Mutex<Vec<Matrix<T>>>>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
-        let weights_cloned;
-        let bias_cloned;
+        let mut weights_iter;
+        let mut bias_iter;
         {
-            weights_cloned = weights.lock().unwrap().clone();
-            bias_cloned = bias.lock().unwrap().clone();
+            weights_iter = weights.lock().unwrap().clone().into_iter();
+            bias_iter = bias.lock().unwrap().clone().into_iter();
         }
         let mut lasts_res = Vec::<Matrix<T>>::with_capacity(nb_layers);
         let mut lasts_cl = Vec::<Matrix<T>>::with_capacity(nb_layers);
         lasts_res.push(images);
 
-        for i in 0..nb_layers {
+        for _ in 0..nb_layers {
             lasts_cl.push(
                 match lasts_res.last() {
-                    Some(matrix) => matrix.clone() * weights_cloned[i].clone() + bias_cloned[i].clone(),
+                    Some(matrix) => matrix.clone() * weights_iter.next().unwrap() + bias_iter.next().unwrap(),
                     None => panic!("Error during propagation"),
                 }
             );
@@ -187,9 +143,9 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
 
         let correction_coef : T = learning_rate / NumCast::from(batch_size).unwrap();
 
-        let cout = responses + -lasts_res.pop().expect("Error during backpropagation");
+        let cost = responses + -lasts_res.pop().expect("Error during backpropagation");
 
-        let mut layer_error = cout & lasts_cl.pop().expect("Error during backpropagation").map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap()));
+        let mut layer_error = cost & lasts_cl.pop().expect("Error during backpropagation").map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap()));
 
         weights[nb_layers - 1] += (lasts_res.pop().expect("Error during backpropagation").t() * layer_error.clone()) * correction_coef;
         bias[nb_layers - 1] += layer_error.clone().sum_line() * correction_coef;
@@ -199,9 +155,6 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
             weights[nb_layers - (i + 1)] += (lasts_res.pop().expect("Error during backpropagation").t() * layer_error.clone()) * correction_coef;
             bias[nb_layers - (i + 1)] += layer_error.clone().sum_line() * correction_coef;
         }
-
-
-
     }
 }
 

@@ -11,3 +11,5 @@ mnist = {git = "https://github.com/Pyrrhos512/Rust-mnist"}
 thread_pool = {git = "https://github.com/Pyrrhos512/Rust-thread_pool"}
 rand = "0.8.5"
 num-traits = "0.2.15"
+mindtree_utils = "0.4.0"
+rand_distr = "0.4.3"

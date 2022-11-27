@@ -83,25 +83,29 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
         let nb_layers = self.nb_layers;
 
         for _ in 0..nb_of_batch {
-            let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();
-            let chosen_images = images.chose_lines(&choices);
-            let chosen_expected_results = expected_results.chose_lines(&choices);
-            let split_chosen_images = chosen_images.split_lines(number_of_threads);
+            let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();  //| Choosing randomly the images that will be use to train the Network for this batch
+            let chosen_images = images.chose_lines(&choices);                           //|
+            let chosen_expected_results = expected_results.chose_lines(&choices);       //|
+
+            let split_chosen_images = chosen_images.split_lines(number_of_threads); //Splitting the chosen images to parallelize the propagation on multiple thread using the thread pool
+
 
             let (sender, receiver) = channel();
             let mut id = 0;
-            for images in split_chosen_images {
-                let weights_ref = self.weights.clone();
-                let bias_ref = self.bias.clone();
-                let sender_clone = sender.clone();
-                let runnable = move || {
-                    (Network::propagation(nb_layers, images, weights_ref, bias_ref), id)
-                };
-                thread_pool.add_task(Box::new(runnable), Some(sender_clone));
-                id +=1;
+            for images in split_chosen_images {                                                      //| Sending all the images to the threads to realise the propagation
+                let weights_ref = self.weights.clone();                                     //|
+                let bias_ref = self.bias.clone();                                           //|
+                let sender_clone = sender.clone();                                                   //|
+                let runnable = move || {                                                              //|
+                    (Network::propagation(nb_layers, images, weights_ref, bias_ref), id)           //| Sending an id to know witch propagation is associated to with expected_results
+                };                                                                                             //|
+                thread_pool.add_task(Box::new(runnable), Some(sender_clone));         //|
+                id +=1;                                                                                        //|
             }
             drop(sender);
 
+
+            //| Sorting things back together according to the ids
             let mut lasts_res : Vec<Vec<Matrix<T>>> = vec![vec![Matrix::new(); number_of_threads]; nb_layers + 1];
             let mut lasts_cl: Vec<Vec<Matrix<T>>> = vec![vec![Matrix::new(); number_of_threads]; nb_layers];
             for ((lasts_res_to_concatenate, lasts_cl_to_concatenate), id) in receiver {
@@ -115,6 +119,7 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
                 }
             }
 
+            //Concatenating things back together
             let lasts_res = {
                 let mut res = Vec::with_capacity(nb_layers + 1);
                 for matrixs in lasts_res {
@@ -130,6 +135,7 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
                 res
             };
 
+            //Realising the backpropagation with the result of the parallelization of propagation
             Network::backpropagation(batch_size, nb_layers, learning_rate, chosen_expected_results, self.weights.clone(), self.bias.clone(), (lasts_res, lasts_cl));
 
         }
@@ -138,7 +144,10 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
 
     /*
     Realise the propagation of the given images through the network and returning all the necessary data to realise the backpropagation
-    - images : Matrix<T>            The images on which the propagation is made
+    - nb_layers : usize                             The number of layer in the Network
+    - images : Matrix<T>                            The images on which the propagation is made
+    - weights : Arc<Mutex<Vec<Matrix<T>>>>          The reference to the weights that must be cloned to realise the propagation
+    - bias : Arc<Mutex<Vec<Matrix<T>>>>             The reference to the bias that must be cloned to realise the propagation
     */
     fn propagation(nb_layers : usize, images : Matrix<T>, weights : Arc<Mutex<Vec<Matrix<T>>>>, bias : Arc<Mutex<Vec<Matrix<T>>>>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
         let mut weights_iter;
@@ -172,8 +181,12 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
 
     /*
     Realise the gradient descent according to the tuple of (lasts_res, lasts_cl) coming from propagation
-     - images : Matrix<T>                                                   The images from which the correction is made
+     - batch_size : usize                                                   The size of the batch, it as to be known to correct the learning rate depending on the number image used to propagate
+     - nb_layers : usize                                                    The number of layers in the Network
+     - learning_rate : T                                                    The learning rate is a coefficient that define the strength of the correction applied to the weights and bias
      - responses : Matrix<T>                                                The correction needed is based on the distance between responses and the actual result from the network coming in the last case of lasts_res
+     - weights : Arc<Mutex<Vec<Matrix<T>>>>                                 Reference to the weights that are going to be corrected according to the data sent by the propagation
+     - bias : Arc<Mutex<Vec<Matrix<T>>>>                                    Reference to the bias that are going to be corrected according to the data sent by the propagation
      - (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)     Those are the computed results after each layer during the propagation of images and are needed to calculate how to correct the weights and bias of the network
     */
     fn backpropagation(batch_size : usize, nb_layers : usize, learning_rate : T, responses : Matrix<T>, weights : Arc<Mutex<Vec<Matrix<T>>>>, bias : Arc<Mutex<Vec<Matrix<T>>>>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) {

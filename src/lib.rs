@@ -1,7 +1,8 @@
 use std::ops::{Add, AddAssign, Mul};
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
 use std::thread::available_parallelism;
-use matrix::Matrix;
+use matrix::{Concatenate, Matrix};
 use num_traits::{Float, NumCast};
 use rand::{distributions::Distribution, Rng, thread_rng};
 use rand::distributions::Uniform;
@@ -9,11 +10,9 @@ use thread_pool::ThreadPool;
 use utils::math::sigmoid;
 
 pub struct Network<T> {
-    entry_size : usize,
     output_size : usize,
     nb_layers: usize,
     learning_rate : T,
-    shape : Vec<usize>,
     weights : Arc<Mutex<Vec<Matrix<T>>>>,
     bias : Arc<Mutex<Vec<Matrix<T>>>>,
 }
@@ -31,11 +30,9 @@ impl<T : Float + Send> Network<T> {
         }
 
         Network {
-            entry_size : *shape.first().unwrap(),
             output_size : *shape.last().unwrap(),
             nb_layers,
             learning_rate,
-            shape,
             weights : Arc::new(Mutex::new(weights)),
             bias : Arc::new(Mutex::new(bias)),
         }
@@ -77,22 +74,64 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
      - batch_size : usize                   The number of image that will be use per batch
     */
     pub fn training(&self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) {
-        let number_of_threads : usize = From::from(available_parallelism().unwrap());
-        let thread_pool: ThreadPool<()> = ThreadPool::new(1);
-
         let range = Uniform::new(0, images.lines());
+
+        let number_of_threads : usize = From::from(available_parallelism().unwrap());
+        let thread_pool= ThreadPool::new(number_of_threads);
+
+        let learning_rate = self.learning_rate;
+        let nb_layers = self.nb_layers;
+
         for _ in 0..nb_of_batch {
             let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();
             let chosen_images = images.chose_lines(&choices);
             let chosen_expected_results = expected_results.chose_lines(&choices);
-            let weights_ref = self.weights.clone();
-            let bias_ref = self.bias.clone();
-            let nb_layers = self.nb_layers.clone();
-            let learning_rate = self.learning_rate.clone();
-            let runnable = move || {
-                Network::backpropagation(batch_size, nb_layers, learning_rate, chosen_expected_results, weights_ref.clone(), bias_ref.clone(), Network::propagation(nb_layers, chosen_images,weights_ref, bias_ref))
+            let split_chosen_images = chosen_images.split_lines(number_of_threads);
+
+            let (sender, receiver) = channel();
+            let mut id = 0;
+            for images in split_chosen_images {
+                let weights_ref = self.weights.clone();
+                let bias_ref = self.bias.clone();
+                let sender_clone = sender.clone();
+                let runnable = move || {
+                    (Network::propagation(nb_layers, images, weights_ref, bias_ref), id)
+                };
+                thread_pool.add_task(Box::new(runnable), Some(sender_clone));
+                id +=1;
+            }
+            drop(sender);
+
+            let mut lasts_res : Vec<Vec<Matrix<T>>> = vec![vec![Matrix::new(); number_of_threads]; nb_layers + 1];
+            let mut lasts_cl: Vec<Vec<Matrix<T>>> = vec![vec![Matrix::new(); number_of_threads]; nb_layers];
+            for ((lasts_res_to_concatenate, lasts_cl_to_concatenate), id) in receiver {
+                let mut lasts_res_iter = lasts_res_to_concatenate.into_iter();
+                let mut lasts_cl_iter = lasts_cl_to_concatenate.into_iter();
+                for i in 0..(nb_layers + 1) {
+                    lasts_res[i][id] = lasts_res_iter.next().unwrap();
+                }
+                for i in 0..nb_layers {
+                    lasts_cl[i][id] = lasts_cl_iter.next().unwrap();
+                }
+            }
+
+            let lasts_res = {
+                let mut res = Vec::with_capacity(nb_layers + 1);
+                for matrixs in lasts_res {
+                    res.push(matrixs.concatenate_lines());
+                }
+                res
             };
-            thread_pool.add_task(Box::new(runnable), None);
+            let lasts_cl = {
+                let mut res = Vec::with_capacity(nb_layers);
+                for matrixs in lasts_cl {
+                    res.push(matrixs.concatenate_lines());
+                }
+                res
+            };
+
+            Network::backpropagation(batch_size, nb_layers, learning_rate, chosen_expected_results, self.weights.clone(), self.bias.clone(), (lasts_res, lasts_cl));
+
         }
         thread_pool.join();
     }
@@ -108,7 +147,7 @@ impl<T : Float + Send + 'static> Network<T> where T : AddAssign<T> {
             weights_iter = weights.lock().unwrap().clone().into_iter();
             bias_iter = bias.lock().unwrap().clone().into_iter();
         }
-        let mut lasts_res = Vec::<Matrix<T>>::with_capacity(nb_layers);
+        let mut lasts_res = Vec::<Matrix<T>>::with_capacity(nb_layers + 1);
         let mut lasts_cl = Vec::<Matrix<T>>::with_capacity(nb_layers);
         lasts_res.push(images);
 

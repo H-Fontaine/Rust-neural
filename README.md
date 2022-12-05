@@ -1,3 +1,3 @@
 # Neural
 
-### A neural network trained on the MNIST dataset to recongnize handwritten digits
+### A neural network trained on the MNIST dataset to recognize handwritten digits

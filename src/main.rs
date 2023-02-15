@@ -11,10 +11,10 @@ fn main() {
     let label_test = load_labels("dataset/t10k-labels.idx1-ubyte");
 
     let mut rng = thread_rng();
-    let network = Network::new(vec![784, 200, 30, 10], 4f32, &mut rng, &StandardNormal);
+    let mut network = Network::new(vec![784, 20, 10], 3.5f32, &mut rng, &StandardNormal);
     let responses = labels_to_responses(&label_train);
 
     println!("Efficiency of the network before training : {}%", network.test(images_test.clone(), label_test.clone()) * 100f32);
-    network.training(images_train, responses, 500, 1000);
+    network.training(images_train, responses, 800, 300);
     println!("Efficiency of the network after training : {}%", network.test(images_test, label_test) * 100f32);
 }

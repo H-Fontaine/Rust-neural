@@ -1,12 +1,8 @@
 use std::ops::{Add, AddAssign, Mul};
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
-use std::thread::available_parallelism;
-use matrix::{Concatenate, Matrix};
-use num_traits::{cast, Float, NumCast};
+use matrix::Matrix;
+use num_traits::{Float, NumCast};
 use rand::{distributions::Distribution, Rng, thread_rng};
 use rand::distributions::Uniform;
-use thread_pool::ThreadPool;
 use utils::math::sigmoid;
 
 pub struct Network<T> {
@@ -57,9 +53,9 @@ impl<T : Float> Network<T> {
 }
 
 //TRAINING OF THE NETWORK
-impl<T : Float> Network<T> where T : AddAssign<T> {
+impl<T : Float + Send + Sync> Network<T> where T : AddAssign<T> {
     /*
-    Realise the training of the Network with the given images
+    Realise the training of the Network with the given images on a single thread
      - images : Matrix<T>                   Images on which the network is trained
      - expected_results : Matrix<T>         The results expected for every images to calculate the cost function
      - nb_of_batch : usize                  The number of batch that will be processed
@@ -81,7 +77,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
     Realise the propagation of the given images through the network and returning all the necessary data to realise the backpropagation
     - images : Matrix<T>                            The images on which the propagation is made
     */
-    fn propagation(&self, images : Matrix<T>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
+    pub fn propagation(&self, images : Matrix<T>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
         let mut weights_iter = (&self.weights).into_iter();
         let mut bias_iter = (&self.bias).into_iter();
         let mut lasts_res = Vec::<Matrix<T>>::with_capacity(self.nb_layers + 1);
@@ -113,7 +109,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
      - responses : Matrix<T>                                                The correction needed is based on the distance between responses and the actual result from the network coming in the last case of lasts_res
      - (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)     Those are the computed results after each layer during the propagation of images and are needed to calculate how to correct the weights and bias of the network
     */
-    fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>){
+    pub fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>){
         let mut weights_correction = Vec::with_capacity(self.nb_layers);
         let mut bias_correction = Vec::with_capacity(self.nb_layers);
 
@@ -134,7 +130,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
     Realise the correction of the parameters of the network according to the result of the gradient
      - (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)       Those are the calculated gradient for the weights ans the bias
     */
-    fn correction(&mut self, (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) {
+    pub fn correction(&mut self, (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) {
         for (weights, bias) in (&mut self.weights).into_iter().zip((&mut self.bias).into_iter()) {
             *weights += weights_corrections.pop().expect("Error during correction");
             *bias += bias_corrections.pop().expect("Error during correction");

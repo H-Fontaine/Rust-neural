@@ -1,12 +1,14 @@
-use std::ops::{Add, AddAssign, Mul};
-use std::process::Output;
+use std::ops::AddAssign;
 use matrix::Matrix;
 use num_traits::{Float, NumCast};
 use rand::{distributions::Distribution, Rng, thread_rng};
 use rand::distributions::Uniform;
 use utils::math::sigmoid;
 
-pub struct Network<T> {
+
+pub mod threaded;
+
+pub struct Network<T> where T : Float {
     output_size : usize,
     nb_layers: usize,
     learning_rate : T,
@@ -87,7 +89,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
      - nb_of_batch : usize                  The number of batch that will be processed
      - batch_size : usize                   The number of image that will be use per batch
     */
-    pub fn training(&mut self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) where T : AddAssign<T> {
+    pub fn training(&mut self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) {
         let range = Uniform::new(0, images.lines());
         for _ in 0..nb_of_batch {
             let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();  //| Choosing randomly the images that will be use to train the Network for this batch
@@ -163,14 +165,3 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-

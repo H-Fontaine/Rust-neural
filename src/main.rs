@@ -11,7 +11,7 @@ use thread_pool::ThreadPool;
 
 fn main() {
     let nb_of_batch = 1000;
-    let nb_of_thread = 20;
+    let nb_of_thread = 18;
     let batch_size = 100;
     let learning_rate = 3.5f32;
 
@@ -24,7 +24,7 @@ fn main() {
 
 
     let mut rng = thread_rng();
-    let mut network = Arc::new(RwLock::new(Network::new(vec![784, 50, 10], learning_rate, &mut rng, &StandardNormal)));
+    let network = Arc::new(RwLock::new(Network::new(vec![784, 50, 10], learning_rate, &mut rng, &StandardNormal)));
 
     println!("Efficiency of the network before training : {}%", network.read().unwrap().test(images_test.clone(), label_test.clone()) * 100f32);
 

@@ -1,4 +1,5 @@
 use std::ops::{Add, AddAssign, Mul};
+use std::process::Output;
 use matrix::Matrix;
 use num_traits::{Float, NumCast};
 use rand::{distributions::Distribution, Rng, thread_rng};
@@ -14,7 +15,7 @@ pub struct Network<T> {
 }
 
 //CONSTRUCTORS
-impl<T : Float + Send> Network<T> {
+impl<T : Float> Network<T> {
     pub fn new<R: ?Sized + Rng, D: Distribution<T>> (shape : Vec<usize>, learning_rate : T, rng: &mut R, distribution: &D) -> Network<T> {
         let nb_layers = shape.len() - 1;
         let mut weights = Vec::<Matrix<T>>::with_capacity(nb_layers);
@@ -36,12 +37,12 @@ impl<T : Float + Send> Network<T> {
 }
 
 //USAGE
-impl<T : Float> Network<T> {
+impl<T : Float> Network<T> where T : AddAssign<T> {
     /*
     Propagate the input images through the network
      - images : Matrix<T>           The images that will go through the network
     */
-    pub fn down(&self, images : Matrix<T>) -> Matrix<T> where T :  Mul<Output = T> + AddAssign + Copy {
+    pub fn down(&self, images : Matrix<T>) -> Matrix<T> {
         let mut weights = (&self.weights).into_iter();
         let mut bias = (&self.bias).into_iter();
         let mut res = (images * weights.next().unwrap() + bias.next().unwrap()).map(|a| sigmoid(a));
@@ -50,10 +51,35 @@ impl<T : Float> Network<T> {
         }
         res
     }
+
+    /*
+    Test the Network with the inputted images and labels
+    - images                        The images associated to the labels to be tested by the network
+    - labels                        The associated labels
+     */
+    pub fn test(&self, images : Matrix<T>, labels : Vec<usize>) -> f32 {
+        let nb_images = images.lines();
+        let results = self.down(images);
+        let mut res = 0f32;
+        for i in 0..nb_images {
+            let mut index = 0;
+            let mut max = results[i][0];
+            for j in 1..self.output_size {
+                if results[i][j] >= max {
+                    index = j;
+                    max = results[i][j];
+                }
+            }
+            if labels[i] == index {
+                res += 1f32;
+            }
+        }
+        res / (nb_images as f32)
+    }
 }
 
 //TRAINING OF THE NETWORK
-impl<T : Float + Send + Sync> Network<T> where T : AddAssign<T> {
+impl<T : Float> Network<T> where T : AddAssign<T> {
     /*
     Realise the training of the Network with the given images on a single thread
      - images : Matrix<T>                   Images on which the network is trained
@@ -61,7 +87,7 @@ impl<T : Float + Send + Sync> Network<T> where T : AddAssign<T> {
      - nb_of_batch : usize                  The number of batch that will be processed
      - batch_size : usize                   The number of image that will be use per batch
     */
-    pub fn training(&mut self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) {
+    pub fn training(&mut self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) where T : AddAssign<T> {
         let range = Uniform::new(0, images.lines());
         for _ in 0..nb_of_batch {
             let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();  //| Choosing randomly the images that will be use to train the Network for this batch
@@ -109,7 +135,7 @@ impl<T : Float + Send + Sync> Network<T> where T : AddAssign<T> {
      - responses : Matrix<T>                                                The correction needed is based on the distance between responses and the actual result from the network coming in the last case of lasts_res
      - (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)     Those are the computed results after each layer during the propagation of images and are needed to calculate how to correct the weights and bias of the network
     */
-    pub fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>){
+    pub fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
         let mut weights_correction = Vec::with_capacity(self.nb_layers);
         let mut bias_correction = Vec::with_capacity(self.nb_layers);
 
@@ -137,29 +163,6 @@ impl<T : Float + Send + Sync> Network<T> where T : AddAssign<T> {
         }
     }
 }
-
-impl<T : Float> Network<T> where T : Clone + Copy + Add<T, Output = T> + Mul<T, Output = T> + AddAssign {
-    pub fn test(&self, images : Matrix<T>, labels : Vec<usize>) -> f32 {
-        let nb_images = images.lines();
-        let results = self.down(images);
-        let mut res = 0f32;
-        for i in 0..nb_images {
-            let mut index = 0;
-            let mut max = results[i][0];
-            for j in 1..self.output_size {
-                if results[i][j] >= max {
-                    index = j;
-                    max = results[i][j];
-                }
-            }
-            if labels[i] == index {
-                res += 1f32;
-            }
-        }
-        res / (nb_images as f32)
-    }
-}
-
 
 
 

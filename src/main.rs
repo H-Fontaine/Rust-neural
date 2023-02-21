@@ -4,10 +4,10 @@ use rand_distr::StandardNormal;
 use neural::threaded::ThreadedNetwork;
 
 fn main() {
-    let nb_of_batch = 100;
-    let nb_of_thread = 18;
+    let nb_of_batch = 1000;
+    let nb_of_thread = 10;
     let batch_size = 5;
-    let learning_rate = 3.5f32;
+    let learning_rate = 3.5f64;
 
 
     let images_train = load_images("dataset/train-images.idx3-ubyte");

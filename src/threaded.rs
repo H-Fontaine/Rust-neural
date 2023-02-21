@@ -58,6 +58,25 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T
     }
 
     pub fn test(&self, images : Matrix<T>, labels : Vec<usize>) -> f32 {
-        self.network.read().unwrap().test(images, labels)
+        let mut res = 0f32;
+        let number_of_test = labels.len() as f32;
+        let thread_pool = ThreadPool::new(self.nb_of_threads);
+        let split_images = images.split_lines(self.nb_of_threads);
+        let mut labels_iter = labels.into_iter();
+        let (sender, receiver) = channel();
+
+        for images_batch in split_images {
+            let labels_batch = labels_iter.by_ref().take(images_batch.lines()).collect();
+            let sender_cloned = sender.clone();
+            let network_ref = self.network.clone();
+            let task = move || {(images_batch.lines() as f32) * network_ref.read().unwrap().test(images_batch, labels_batch)};
+            thread_pool.add_task(Box::new(task), Some(sender_cloned));
+        }
+        drop(sender);
+        for result in receiver {
+            res += result;
+        }
+        thread_pool.join();
+        res / number_of_test
     }
 }

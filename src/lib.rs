@@ -47,9 +47,9 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
     pub fn down(&self, images : Matrix<T>) -> Matrix<T> {
         let mut weights = (&self.weights).into_iter();
         let mut bias = (&self.bias).into_iter();
-        let mut res = (images * weights.next().unwrap() + bias.next().unwrap()).map(|a| sigmoid(a));
+        let mut res = ((images * weights.next().unwrap()).add_to_lines(bias.next().unwrap())).map(|a| sigmoid(a));
         for _ in 1..self.nb_layers {
-            res = (res * weights.next().unwrap() + bias.next().unwrap()).map(|a| sigmoid(a));
+            res = ((res * weights.next().unwrap()).add_to_lines(bias.next().unwrap())).map(|a| sigmoid(a));
         }
         res
     }
@@ -93,8 +93,8 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
         let range = Uniform::new(0, images.lines());
         for _ in 0..nb_of_batch {
             let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();  //| Choosing randomly the images that will be use to train the Network for this batch
-            let chosen_images = images.chose_lines(&choices);                           //|
-            let chosen_expected_results = expected_results.chose_lines(&choices);       //|
+            let chosen_images = images.chose_lines_by_index(&choices);                           //|
+            let chosen_expected_results = expected_results.chose_lines_by_index(&choices);       //|
 
             //Realising the backpropagation with the result of the parallelization of propagation
             self.correction(self.gradient(self.learning_rate / NumCast::from(batch_size).unwrap(), chosen_expected_results, self.propagation(chosen_images)));
@@ -115,7 +115,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
         for _ in 0..self.nb_layers {
             lasts_cl.push(
                 match lasts_res.last() {
-                    Some(matrix) => matrix * weights_iter.next().unwrap() + bias_iter.next().unwrap(),
+                    Some(matrix) => (matrix * weights_iter.next().unwrap()).add_to_lines(bias_iter.next().unwrap()),
                     None => panic!("Error during propagation"),
                 }
             );

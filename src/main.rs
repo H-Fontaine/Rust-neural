@@ -5,8 +5,8 @@ use neural::threaded::ThreadedNetwork;
 
 fn main() {
     let nb_of_batch = 1000;
-    let nb_of_thread = 10;
-    let batch_size = 5;
+    let nb_of_thread = 20;
+    let batch_size = 3;
     let learning_rate = 3.5f64;
 
 

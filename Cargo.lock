@@ -51,8 +51,8 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 
 [[package]]
 name = "matrix"
-version = "0.1.0"
-source = "git+https://github.com/Pyrrhos512/Rust-matrix#f09cb39ee31a326c7c179bfa9e7bdc62778deac1"
+version = "0.4.0"
+source = "git+https://github.com/Pyrrhos512/Rust-matrix#4c1dbfd17c01f060ae4d4f1d7252644f2d058c83"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
@@ -72,7 +72,7 @@ dependencies = [
 [[package]]
 name = "mnist"
 version = "0.1.0"
-source = "git+https://github.com/Pyrrhos512/Rust-mnist#2d45cd0793062a4706500e353761e4b246ca8a0c"
+source = "git+https://github.com/Pyrrhos512/Rust-mnist#14012ca66adfa01598fa7420a521e368ba431737"
 dependencies = [
  "byteorder",
  "matrix",

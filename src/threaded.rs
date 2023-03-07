@@ -34,8 +34,8 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T
 
             for _ in 0..self.nb_of_threads {
                 let choices : Vec<usize> = thread_rng().sample_iter(range).take(batch_size).collect();  //| Choosing randomly the images that will be use to train the Network for this batch
-                let chosen_images = images.chose_lines(&choices);                           //|
-                let chosen_expected_results = expected_results.chose_lines(&choices);       //|
+                let chosen_images = images.chose_lines_by_index(&choices);                           //|
+                let chosen_expected_results = expected_results.chose_lines_by_index(&choices);       //|
                 let cloned_sender = sender.clone();
                 let cloned_arc_network = self.network.clone();
 
@@ -80,3 +80,24 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T
         res / number_of_test
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

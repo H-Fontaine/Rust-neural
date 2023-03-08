@@ -1,7 +1,7 @@
 use std::ops::AddAssign;
 use matrix::Matrix;
-use num_traits::Float;
-use rand::distributions::{Distribution, Standard, Uniform};
+use num_traits::{Float, NumCast};
+use rand::distributions::{Distribution};
 use rand::{Rng, thread_rng};
 use crate::Network;
 
@@ -42,8 +42,8 @@ impl<T : Float> AdversarialNetworks<T> {
 }
 
 //INTERNAL FUNCTIONALITIES
-impl<T : Float> AdversarialNetworks<T> {
-    fn train_discriminator(&mut self, fakes : Matrix<T>, real : Matrix<T>) where T : AddAssign {
+impl<T : Float> AdversarialNetworks<T> where T : AddAssign {
+    fn train_discriminator(&mut self, fakes : Matrix<T>, real : Matrix<T>) {
         let mut responses = Matrix::zeros(fakes.lines() + real.lines(), 2);
         for i in 0..fakes.lines() {
             responses[i][1] = T::one(); //If it is a fake we want index 1 to trigger
@@ -54,6 +54,20 @@ impl<T : Float> AdversarialNetworks<T> {
         let input = fakes.concatenate_lines(real);
         self.discriminator_network.simple_train(input, responses);
     }
+
+    fn train_generative(&mut self, input : Matrix<T>) {
+        let correction_coef = self.get_learning_rate() / NumCast::from(input.lines()).unwrap();
+        let mut responses = Matrix::zeros(input.lines(), 2);
+        for i in 0..responses.lines() {
+            responses[i][0] = T::one(); //We want to maximise discriminator error so we want 0 to trigger (because we want the input to be detected as a real one)
+        }
+
+        let (mut lasts_res_generative, lasts_cl_generative) = self.generative_network.propagation(input);
+        let propagation_discriminator = self.discriminator_network.propagation(lasts_res_generative.pop().unwrap()); //Moving the result of the generative network into lasts_res_discriminator.first()
+        let cost_generative = self.discriminator_network.compute_first_layer_error(responses,propagation_discriminator);
+        let gradient_generative = self.generative_network.gradient_from_cost(correction_coef,cost_generative, (lasts_res_generative, lasts_cl_generative));
+        self.generative_network.correction(gradient_generative);
+    }
 }
 
 
@@ -63,6 +77,9 @@ impl<T : Float> AdversarialNetworks<T> {
         self.generative_network.bias.first().unwrap().lines()
     }
 
+    pub fn get_learning_rate(&self) -> T {
+        self.generative_network.learning_rate
+    }
 }
 
 

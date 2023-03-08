@@ -115,7 +115,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
     Realise the propagation of the given images through the network and returning all the necessary data to realise the backpropagation
     - images : Matrix<T>                            The images on which the propagation is made
     */
-    pub fn propagation(&self, images : Matrix<T>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
+    fn propagation(&self, images : Matrix<T>) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
         let mut weights_iter = (&self.weights).into_iter();
         let mut bias_iter = (&self.bias).into_iter();
         let mut lasts_res = Vec::<Matrix<T>>::with_capacity(self.nb_layers + 1);
@@ -147,11 +147,15 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
      - responses : Matrix<T>                                                The correction needed is based on the distance between responses and the actual result from the network coming in the last case of lasts_res
      - (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)     Those are the computed results after each layer during the propagation of images and are needed to calculate how to correct the weights and bias of the network
     */
-    pub fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
+    fn gradient(&self, correction_coef : T, responses : Matrix<T>, (mut lasts_res, lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
+        let cost = responses + -lasts_res.pop().expect("Error during backpropagation");
+        self.gradient_from_cost(correction_coef, cost, (lasts_res, lasts_cl))
+    }
+
+    fn gradient_from_cost(&self, correction_coef : T, cost : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> (Vec<Matrix<T>>, Vec<Matrix<T>>) {
         let mut weights_correction = Vec::with_capacity(self.nb_layers);
         let mut bias_correction = Vec::with_capacity(self.nb_layers);
 
-        let cost = responses + -lasts_res.pop().expect("Error during backpropagation");
         let mut layer_error = cost & lasts_cl.pop().expect("Error during backpropagation").map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap()));
 
         weights_correction.push(lasts_res.pop().expect("Error during backpropagation").t() * layer_error.clone() * correction_coef);
@@ -165,11 +169,20 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
         (weights_correction, bias_correction)
     }
 
+    fn compute_first_layer_error(&self, responses : Matrix<T>, (mut lasts_res, mut lasts_cl) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) -> Matrix<T> {
+        let cost = responses + -lasts_res.pop().unwrap();
+        let mut layer_error = cost & lasts_cl.pop().unwrap().map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap()));
+        for i in 1..self.nb_layers {
+            layer_error = (layer_error * self.weights[self.nb_layers - i].t()) & (lasts_cl.pop().unwrap().map(|a| sigmoid(a) * (-sigmoid(a) + NumCast::from(1).unwrap())));
+        }
+        layer_error
+    }
+
     /*
     Realise the correction of the parameters of the network according to the result of the gradient
      - (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)       Those are the calculated gradient for the weights ans the bias
     */
-    pub fn correction(&mut self, (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) {
+    fn correction(&mut self, (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)) {
         for (weights, bias) in (&mut self.weights).into_iter().zip((&mut self.bias).into_iter()) {
             *weights += weights_corrections.pop().expect("Error during correction");
             *bias += bias_corrections.pop().expect("Error during correction");

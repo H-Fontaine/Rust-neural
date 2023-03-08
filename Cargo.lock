@@ -52,7 +52,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 [[package]]
 name = "matrix"
 version = "0.4.0"
-source = "git+https://github.com/Pyrrhos512/Rust-matrix#4c1dbfd17c01f060ae4d4f1d7252644f2d058c83"
+source = "git+https://github.com/Pyrrhos512/Rust-matrix#088b093fc311e749621edb807ede31150c86cbef"
 dependencies = [
  "num-traits",
  "rand 0.8.5",

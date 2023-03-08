@@ -7,6 +7,7 @@ use utils::math::sigmoid;
 
 
 pub mod threaded;
+mod generative;
 
 pub struct Network<T> where T : Float {
     output_size : usize,

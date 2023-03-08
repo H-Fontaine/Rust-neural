@@ -2,7 +2,7 @@ use std::ops::AddAssign;
 use matrix::Matrix;
 use num_traits::{Float, NumCast};
 use rand::distributions::{Distribution};
-use rand::{Rng, thread_rng};
+use rand::{Rng};
 use crate::Network;
 
 pub struct AdversarialNetworks<T> where T : Float {
@@ -62,10 +62,12 @@ impl<T : Float> AdversarialNetworks<T> where T : AddAssign {
             responses[i][0] = T::one(); //We want to maximise discriminator error so we want 0 to trigger (because we want the input to be detected as a real one)
         }
 
-        let (mut lasts_res_generative, lasts_cl_generative) = self.generative_network.propagation(input);
-        let propagation_discriminator = self.discriminator_network.propagation(lasts_res_generative.pop().unwrap()); //Moving the result of the generative network into lasts_res_discriminator.first()
-        let cost_generative = self.discriminator_network.compute_first_layer_error(responses,propagation_discriminator);
-        let gradient_generative = self.generative_network.gradient_from_cost(correction_coef,cost_generative, (lasts_res_generative, lasts_cl_generative));
+        let (mut lasts_res_generative, mut lasts_cl_generative) = self.generative_network.propagation(input);
+        let (lasts_res_discriminator, lasts_cl_discriminator) = self.discriminator_network.propagation(lasts_res_generative.pop().unwrap()); //Moving the result of the generative network into lasts_res_discriminator.first()
+        let mut last_cl_discriminator_augmented = vec![lasts_cl_generative.pop().unwrap()];
+        last_cl_discriminator_augmented.extend(lasts_cl_discriminator);
+        let cost_generative = self.discriminator_network.compute_first_layer_error(responses,(lasts_res_discriminator, last_cl_discriminator_augmented));
+        let gradient_generative = self.generative_network.gradient_from_layer_error(correction_coef,cost_generative, (lasts_res_generative, lasts_cl_generative));
         self.generative_network.correction(gradient_generative);
     }
 }

@@ -11,6 +11,7 @@ pub struct AdversarialNetworks<T> where T : Float {
     discriminator_network : Network<T>,
 }
 
+//CONSTRUCTORS
 impl<T : Float> AdversarialNetworks<T> {
     pub fn new<R: ?Sized + Rng, D: Distribution<T>> (generative_shape : Vec<usize>, discriminator_shape : Vec<usize> ,learning_rate : T, rng: &mut R, distribution: &D) -> AdversarialNetworks<T> {
         assert_eq!(generative_shape.last().unwrap(), discriminator_shape.first().unwrap(), "The output size of the generative network must be equal to the input of the discriminator network");
@@ -21,15 +22,23 @@ impl<T : Float> AdversarialNetworks<T> {
             discriminator_network : Network::new(discriminator_shape, learning_rate, rng, distribution),
         }
     }
+}
 
+//USAGE
+impl<T : Float> AdversarialNetworks<T> {
     pub fn generate<D: Distribution<T>>(&self, nb_to_generate : usize, distribution : D) -> Matrix<T> where T : AddAssign {
         let mut rng = thread_rng();
         self.generative_network.down(Matrix::new_rand(nb_to_generate, self.get_input_size(), &mut rng, distribution))
     }
 }
 
+//USAGE
+impl<T : Float> AdversarialNetworks<T> {
 
-//Getters
+}
+
+
+//GETTERS
 impl<T : Float> AdversarialNetworks<T> {
     pub fn get_input_size(&self) -> usize {
         self.generative_network.bias.first().unwrap().lines()

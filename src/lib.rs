@@ -7,7 +7,7 @@ use utils::math::sigmoid;
 
 
 pub mod threaded;
-mod adversarial;
+pub mod adversarial;
 
 pub struct Network<T> where T : Float {
     output_size : usize,
@@ -84,7 +84,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
 //TRAINING OF THE NETWORK
 impl<T : Float> Network<T> where T : AddAssign<T> {
     /*
-    Realise the training of the Network with the given images on a single thread
+    Realise the training of the Network with the given images according to batch input
      - images : Matrix<T>                   Images on which the network is trained
      - expected_results : Matrix<T>         The results expected for every images to calculate the cost function
      - nb_of_batch : usize                  The number of batch that will be processed
@@ -100,6 +100,15 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
             //Realising the backpropagation with the result of the parallelization of propagation
             self.correction(self.gradient(self.learning_rate / NumCast::from(batch_size).unwrap(), chosen_expected_results, self.propagation(chosen_images)));
         }
+    }
+
+    /*
+    Realise the training of the Network with the whole given input
+     - input : Matrix<T>                    Input on which the network is trained
+     - expected_results : Matrix<T>         The results expected for every input to calculate the cost function
+    */
+    fn simple_train(&mut self, input : Matrix<T>, expected_results : Matrix<T>) {
+        self.correction(self.gradient(self.learning_rate / NumCast::from(input.lines()).unwrap(), expected_results, self.propagation(input)));
     }
 
     /*
@@ -155,6 +164,7 @@ impl<T : Float> Network<T> where T : AddAssign<T> {
         }
         (weights_correction, bias_correction)
     }
+
     /*
     Realise the correction of the parameters of the network according to the result of the gradient
      - (mut weights_corrections, mut bias_corrections) : (Vec<Matrix<T>>, Vec<Matrix<T>>)       Those are the calculated gradient for the weights ans the bias

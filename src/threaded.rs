@@ -1,21 +1,19 @@
-use std::ops::AddAssign;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
 use matrix::Matrix;
-use num_traits::{Float, NumCast};
 use rand::distributions::{Distribution, Uniform};
 use rand::{Rng, thread_rng};
 use thread_pool::ThreadPool;
 use crate::Network;
 
-pub struct ThreadedNetwork<T> where T : Float + Send + Sync + 'static {
-    network : Arc<RwLock<Network<T>>>,
+pub struct ThreadedNetwork {
+    network : Arc<RwLock<Network>>,
     nb_of_threads : usize,
 }
 
 //CONSTRUCTORS
-impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> {
-    pub fn new<R: ?Sized + Rng, D: Distribution<T>> (shape : Vec<usize>, learning_rate : T, rng: &mut R, distribution: &D, number_of_threads : usize) -> ThreadedNetwork<T> {
+impl ThreadedNetwork {
+    pub fn new<R: ?Sized + Rng, D: Distribution<f64>> (shape : Vec<usize>, learning_rate : f64, rng: &mut R, distribution: &D, number_of_threads : usize) -> ThreadedNetwork {
         ThreadedNetwork {
             network : Arc::new(RwLock::new(Network::new(shape, learning_rate, rng, distribution))),
             nb_of_threads : number_of_threads,
@@ -23,10 +21,10 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> {
     }
 }
 
-impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T> {
-    pub fn training(&self, images : Matrix<T>, expected_results : Matrix<T>, nb_of_batch : usize, batch_size : usize) {
+impl ThreadedNetwork {
+    pub fn training(&self, images : Matrix<f64>, expected_results : Matrix<f64>, nb_of_batch : usize, batch_size : usize) {
         let thread_pool = ThreadPool::new(self.nb_of_threads);
-        let correction_coef =  self.network.read().unwrap().learning_rate / NumCast::from(batch_size * self.nb_of_threads).unwrap();
+        let correction_coef =  self.network.read().unwrap().learning_rate / (batch_size * self.nb_of_threads) as f64;
         let range = Uniform::new(0, images.lines());
 
         for _ in 0..nb_of_batch {
@@ -57,9 +55,9 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T
         thread_pool.join();
     }
 
-    pub fn test(&self, images : Matrix<T>, labels : Vec<usize>) -> f32 {
-        let mut res = 0f32;
-        let number_of_test = labels.len() as f32;
+    pub fn test(&self, images : Matrix<f64>, labels : Vec<usize>) -> f64 {
+        let mut res = 0f64;
+        let number_of_test = labels.len() as f64;
         let thread_pool = ThreadPool::new(self.nb_of_threads);
         let split_images = images.split_lines(self.nb_of_threads);
         let mut labels_iter = labels.into_iter();
@@ -69,7 +67,7 @@ impl<T : Float + Send + Sync + 'static> ThreadedNetwork<T> where T : AddAssign<T
             let labels_batch = labels_iter.by_ref().take(images_batch.lines()).collect();
             let sender_cloned = sender.clone();
             let network_ref = self.network.clone();
-            let task = move || {(images_batch.lines() as f32) * network_ref.read().unwrap().test(images_batch, labels_batch)};
+            let task = move || {(images_batch.lines() as f64) * network_ref.read().unwrap().test(images_batch, labels_batch)};
             thread_pool.add_task(Box::new(task), Some(sender_cloned));
         }
         drop(sender);

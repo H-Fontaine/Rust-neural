@@ -1,18 +1,16 @@
-use std::ops::AddAssign;
 use matrix::Matrix;
-use num_traits::{Float, NumCast};
 use rand::distributions::{Distribution};
 use rand::{Rng};
 use crate::Network;
 
-pub struct AdversarialNetworks<T> where T : Float {
-    generative_network : Network<T>,
-    discriminator_network : Network<T>,
+pub struct AdversarialNetworks {
+    generative_network : Network,
+    discriminator_network : Network,
 }
 
 //CONSTRUCTORS
-impl<T : Float> AdversarialNetworks<T> {
-    pub fn new<R: ?Sized + Rng, D: Distribution<T>> (generative_shape : Vec<usize>, discriminator_shape : Vec<usize> ,learning_rate : T, rng: &mut R, distribution: &D) -> AdversarialNetworks<T> {
+impl<> AdversarialNetworks {
+    pub fn new<R: ?Sized + Rng, D: Distribution<f64>> (generative_shape : Vec<usize>, discriminator_shape : Vec<usize>, learning_rate : f64, rng: &mut R, distribution: &D) -> AdversarialNetworks {
         assert_eq!(generative_shape.last().unwrap(), discriminator_shape.first().unwrap(), "The output size of the generative network must be equal to the input of the discriminator network");
         assert_eq!(*discriminator_shape.last().unwrap(), 2, "The output of the discriminator network must be 2");
 
@@ -24,12 +22,12 @@ impl<T : Float> AdversarialNetworks<T> {
 }
 
 //USAGE
-impl<T : Float> AdversarialNetworks<T> {
-    pub fn generate<R: ?Sized + Rng, D: Distribution<T>>(&self, nb_to_generate : usize, rng : &mut R, distribution : D) -> Matrix<T> where T : AddAssign {
+impl AdversarialNetworks {
+    pub fn generate<R: ?Sized + Rng, D: Distribution<f64>>(&self, nb_to_generate : usize, rng : &mut R, distribution : D) -> Matrix<f64> {
         self.generative_network.down(Matrix::new_rand(nb_to_generate, self.get_input_size(), rng, distribution))
     }
 
-    pub fn training<R: ?Sized + Rng, D: Distribution<T>>(&mut self, to_mimic : Matrix<T>, nb_of_batch : usize, half_batch_size : usize, rng : &mut R, distribution : D) where T : AddAssign {
+    pub fn training<R: ?Sized + Rng, D: Distribution<f64>>(&mut self, to_mimic : Matrix<f64>, nb_of_batch : usize, half_batch_size : usize, rng : &mut R, distribution : D) {
         for _ in 0..nb_of_batch {
             let fakes = self.generate(half_batch_size, rng, &distribution);
             let real = to_mimic.chose_rnd_lines(half_batch_size);
@@ -42,24 +40,24 @@ impl<T : Float> AdversarialNetworks<T> {
 }
 
 //INTERNAL FUNCTIONALITIES
-impl<T : Float> AdversarialNetworks<T> where T : AddAssign {
-    fn train_discriminator(&mut self, fakes : Matrix<T>, real : Matrix<T>) {
+impl AdversarialNetworks {
+    fn train_discriminator(&mut self, fakes : Matrix<f64>, real : Matrix<f64>) {
         let mut responses = Matrix::zeros(fakes.lines() + real.lines(), 2);
         for i in 0..fakes.lines() {
-            responses[i][1] = T::one(); //If it is a fake we want index 1 to trigger
+            responses[i][1] = 1f64; //If it is a fake we want index 1 to trigger
         }
         for i in fakes.lines()..responses.lines() {
-            responses[i][0] = T::one(); //If it is a real one we want index 0 to trigger
+            responses[i][0] = 1f64; //If it is a real one we want index 0 to trigger
         }
         let input = fakes.concatenate_lines(real);
         self.discriminator_network.simple_train(input, responses);
     }
 
-    fn train_generative(&mut self, input : Matrix<T>) {
-        let correction_coef = self.get_learning_rate() / NumCast::from(input.lines()).unwrap();
+    fn train_generative(&mut self, input : Matrix<f64>) {
+        let correction_coef = self.get_learning_rate() / (input.lines() as f64);
         let mut responses = Matrix::zeros(input.lines(), 2);
         for i in 0..responses.lines() {
-            responses[i][0] = T::one(); //We want to maximise discriminator error so we want 0 to trigger (because we want the input to be detected as a real one)
+            responses[i][0] = 1f64; //We want to maximise discriminator error so we want 0 to trigger (because we want the input to be detected as a real one)
         }
 
         let (mut lasts_res_generative, mut lasts_cl_generative) = self.generative_network.propagation(input);
@@ -74,12 +72,12 @@ impl<T : Float> AdversarialNetworks<T> where T : AddAssign {
 
 
 //GETTERS
-impl<T : Float> AdversarialNetworks<T> {
+impl AdversarialNetworks {
     pub fn get_input_size(&self) -> usize {
-        self.generative_network.bias.first().unwrap().lines()
+        self.generative_network.weights.first().unwrap().lines()
     }
 
-    pub fn get_learning_rate(&self) -> T {
+    pub fn get_learning_rate(&self) -> f64 {
         self.generative_network.learning_rate
     }
 }
